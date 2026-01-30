@@ -8,6 +8,7 @@
             <?php
             if (isset($_SESSION["id"]) && !empty($_SESSION["id"])) {
                 echo '<li class="nav-item"><a class="nav-link" href="dashboard.php">Home</a></li>';
+                echo '<li class="nav-item"><a class="nav-link" href="user_profile.php">Profile</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="view_cases.php">My Cases</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="logout.php">Logout</a></li>';
             } else {

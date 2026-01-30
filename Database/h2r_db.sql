@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Dec 09, 2025 at 09:11 AM
+-- Generation Time: Jan 30, 2026 at 07:23 AM
 -- Server version: 10.4.28-MariaDB
 -- PHP Version: 8.2.4
 
@@ -66,7 +66,8 @@ CREATE TABLE `cases` (
 --
 
 INSERT INTO `cases` (`id`, `case_title`, `description`, `user_id`, `assigned_ngo_id`, `assigned_staff_id`, `status`, `problem_category`, `severity`, `risk_level`, `created_at`, `closed_at`) VALUES
-(1, 'New dfres', 'fdses', 1, 1, 1, 'closed', 'fds', 'Medium', 'Low', '2025-12-09 11:34:04', NULL);
+(1, 'New dfres', 'fdses', 1, 1, 1, 'closed', 'fds', 'Medium', 'Low', '2025-12-09 11:34:04', '2026-01-30 11:23:05'),
+(2, 'Case 3', 'fsa', 1, 1, 1, 'closed', 'fds', 'Medium', 'Medium', '2026-01-30 11:16:49', '2026-01-30 11:20:24');
 
 -- --------------------------------------------------------
 
@@ -90,7 +91,8 @@ CREATE TABLE `closure_requests` (
 --
 
 INSERT INTO `closure_requests` (`id`, `case_id`, `staff_id`, `ngo_id`, `request_date`, `status`, `notes`, `responded_at`) VALUES
-(1, 1, 1, 1, '2025-12-09 12:09:43', '', 'Please Close this Case', '2025-12-09 12:27:26');
+(2, 2, 1, 1, '2026-01-30 11:18:06', 'approved', 'XYZ', '2026-01-30 11:20:24'),
+(3, 1, 1, 1, '2026-01-30 11:21:44', 'approved', '', '2026-01-30 11:23:05');
 
 -- --------------------------------------------------------
 
@@ -145,7 +147,17 @@ CREATE TABLE `ngos` (
 --
 
 INSERT INTO `ngos` (`id`, `ngo_name`, `registration_number`, `address`, `contact_person`, `phone`, `email`, `password`, `service_areas`, `capacity`, `status`, `created_at`) VALUES
-(1, 'Eedhi', 'ds4gfd', 'rec12', 'NASIR ABBAS', '03176526827', 'nasiryt.827@gmail.com', '$2y$10$sJuV4ulWTkBhWGqQxojns.Kb.0fV.5uKDJR5Ozbt0k1l4MnV7HveS', 'lahore', 50, 'verified', '2025-12-09 11:04:02');
+(1, 'Eedhi', 'ds4gfd', 'rec12', 'NASIR ABBAS', '03176526827', 'nasiryt.827@gmail.com', '$2y$10$sJuV4ulWTkBhWGqQxojns.Kb.0fV.5uKDJR5Ozbt0k1l4MnV7HveS', 'lahore , Multan', 50, 'verified', '2025-12-09 11:04:02'),
+(2, 'HopeCare Foundation', 'REG-001', 'Karachi, Pakistan', 'Ayesha Khan', '0301-1111111', 'hopecare@example.com', '$2y$10$examplehash1', 'Mental Health, Counseling', 60, 'verified', '2026-01-30 11:15:49'),
+(3, 'MindWell Society', 'REG-002', 'Lahore, Pakistan', 'Ali Raza', '0302-2222222', 'mindwell@example.com', '$2y$10$examplehash2', 'Depression, Anxiety Support', 50, 'verified', '2026-01-30 11:15:49'),
+(4, 'LifeSupport Trust', 'REG-003', 'Islamabad, Pakistan', 'Sara Ahmed', '0303-3333333', 'lifesupport@example.com', '$2y$10$examplehash3', 'Trauma Recovery, Therapy', 70, 'verified', '2026-01-30 11:15:49'),
+(5, 'BrightFuture NGO', 'REG-004', 'Rawalpindi, Pakistan', 'Usman Iqbal', '0304-4444444', 'brightfuture@example.com', '$2y$10$examplehash4', 'Youth Counseling, Education', 55, 'verified', '2026-01-30 11:15:49'),
+(6, 'PeaceMind Organization', 'REG-005', 'Faisalabad, Pakistan', 'Hina Malik', '0305-5555555', 'peacemind@example.com', '$2y$10$examplehash5', 'Stress Management, Counseling', 65, 'verified', '2026-01-30 11:15:49'),
+(7, 'WellBeing Network', 'REG-006', 'Multan, Pakistan', 'Bilal Hussain', '0306-6666666', 'wellbeing@example.com', '$2y$10$examplehash6', 'Mental Wellness, Therapy', 80, 'verified', '2026-01-30 11:15:49'),
+(8, 'CareBridge NGO', 'REG-007', 'Peshawar, Pakistan', 'Nadia Shah', '0307-7777777', 'carebridge@example.com', '$2y$10$examplehash7', 'Crisis Support, Counseling', 45, 'verified', '2026-01-30 11:15:49'),
+(9, 'Healing Hands', 'REG-008', 'Quetta, Pakistan', 'Kamran Ali', '0308-8888888', 'healinghands@example.com', '$2y$10$examplehash8', 'Psychological Support', 40, 'verified', '2026-01-30 11:15:49'),
+(10, 'MindCare Pakistan', 'REG-009', 'Sialkot, Pakistan', 'Rabia Noor', '0309-9999999', 'mindcare@example.com', '$2y$10$examplehash9', 'Mental Health Awareness', 75, 'verified', '2026-01-30 11:15:49'),
+(11, 'SafeSpace Initiative', 'REG-010', 'Gujranwala, Pakistan', 'Farhan Latif', '0310-1010101', 'safespace@example.com', '$2y$10$examplehash10', 'Counseling, Rehab Support', 90, 'verified', '2026-01-30 11:15:49');
 
 -- --------------------------------------------------------
 
@@ -245,7 +257,7 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `password`, `phone`, `emergency_contact`, `role`, `gender`, `age`, `status`, `created_at`) VALUES
-(1, 'NASIR ABBAS', 'nasiryt.827@gmail.com', '$2y$10$5BEcp/RZ4cCzsRihfkQmW./cAhunWz8zdsk8o7bhJw64.7OQ2/ehy', '03176526827', '03176526827', 'user', 'male', 22, 'active', '2025-12-09 11:01:07');
+(1, 'NASIR ABBAS', 'nasiryt.827@gmail.com', '$2y$10$5BEcp/RZ4cCzsRihfkQmW./cAhunWz8zdsk8o7bhJw64.7OQ2/ehy', '03176526827', '03176526827', 'user', 'Male', 22, 'active', '2025-12-09 11:01:07');
 
 --
 -- Indexes for dumped tables
@@ -329,13 +341,13 @@ ALTER TABLE `admins`
 -- AUTO_INCREMENT for table `cases`
 --
 ALTER TABLE `cases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `closure_requests`
 --
 ALTER TABLE `closure_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `counseling_sessions`
@@ -347,7 +359,7 @@ ALTER TABLE `counseling_sessions`
 -- AUTO_INCREMENT for table `ngos`
 --
 ALTER TABLE `ngos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `ngo_staff`
