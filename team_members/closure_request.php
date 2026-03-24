@@ -2,7 +2,7 @@
 session_start();
 include('../config.php');
 
-if (!isset($_SESSION["id"]) || $_SESSION["role"] !== 'ngo_staff') {
+if (!isset($_SESSION["id"]) || $_SESSION["role"] !== 'team_members') {
     header("location: ../login.php");
     exit;
 }

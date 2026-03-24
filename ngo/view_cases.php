@@ -11,64 +11,19 @@ if (!isset($_SESSION["id"]) || $_SESSION["role"] !== 'ngo') {
 $ngo_id = $_SESSION["id"];
 $ngo_name = $_SESSION["name"];
 
-// Handle Closure Request actions
-if (isset($_GET['closure_id'], $_GET['action'])) {
-    $closure_id = intval($_GET['closure_id']);
-    $action = $_GET['action'];
-
-    if ($action === 'close') {
-
-        // Close case + fill closed_at
-        $stmt = $conn->prepare("
-            UPDATE cases c
-            JOIN closure_requests cr ON c.id = cr.case_id
-            SET 
-                c.status = 'closed',
-                c.closed_at = NOW(),
-                cr.status = 'approved',
-                cr.responded_at = NOW()
-            WHERE cr.id = ? AND cr.ngo_id = ?
-        ");
-        $stmt->bind_param("ii", $closure_id, $ngo_id);
-        $stmt->execute();
-        $stmt->close();
-
-        $msg = "Case closed successfully.";
-
-    } elseif ($action === 'reject') {
-
-        // Reject closure request only
-        $stmt = $conn->prepare("
-            UPDATE closure_requests 
-            SET status = 'rejected', responded_at = NOW()
-            WHERE id = ? AND ngo_id = ?
-        ");
-        $stmt->bind_param("ii", $closure_id, $ngo_id);
-        $stmt->execute();
-        $stmt->close();
-
-        $msg = "Closure request rejected.";
-    }
-}
-
-// Fetch all cases and closure requests for this NGO
+// Fetch all cases assigned to this NGO
 $stmt = $conn->prepare("
     SELECT c.*, 
            u.name AS user_name, 
            u.email AS user_email, 
-           s.full_name AS assigned_staff,
-           cr.id AS closure_id, 
-           cr.status AS closure_status, 
-           cr.notes AS closure_notes
+           s.full_name AS assigned_staff
     FROM cases c
     JOIN users u ON c.user_id = u.id
-    LEFT JOIN ngo_staff s ON c.assigned_staff_id = s.id
-    LEFT JOIN closure_requests cr 
-        ON c.id = cr.case_id AND cr.ngo_id = ?
+    LEFT JOIN team_members s ON c.assigned_staff_id = s.id
     WHERE c.assigned_ngo_id = ?
     ORDER BY c.created_at DESC
 ");
-$stmt->bind_param("ii", $ngo_id, $ngo_id);
+$stmt->bind_param("i", $ngo_id);
 $stmt->execute();
 $result = $stmt->get_result();
 $stmt->close();
@@ -78,9 +33,8 @@ $stmt->close();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>NGO Dashboard</title>
+    <title>NGO Dashboard | Case Management</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -89,15 +43,14 @@ $stmt->close();
 <?php include('navbar.php'); ?>
 
 <div class="container py-5">
-    <h3 class="mb-4">Recent Cases & Closure Requests</h3>
-
-    <?php if (isset($msg)): ?>
-        <div class="alert alert-success"><?= $msg ?></div>
-    <?php endif; ?>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="">Recent Assigned Cases</h3>
+        <span class="badge badge-primary">NGO: <?= htmlspecialchars($ngo_name) ?></span>
+    </div>
 
     <?php if ($result->num_rows > 0): ?>
         <div class="table-responsive">
-            <table class="table table-bordered table-striped">
+            <table class="table table-bordered table-hover">
                 <thead class="thead-dark">
                     <tr>
                         <th>Case ID</th>
@@ -107,58 +60,31 @@ $stmt->close();
                         <th>Status</th>
                         <th>Assigned Staff</th>
                         <th>Created At</th>
-                        <th>Closure Request</th>
-                        <th>Actions</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php while ($case = $result->fetch_assoc()): ?>
-                    <tr class="<?= $case['assigned_staff_id'] ? 'table-success' : 'table-warning' ?>">
-                        <td><?= $case['id'] ?></td>
+                    <tr class="<?= $case['assigned_staff_id'] ? '' : 'table-warning' ?>">
+                        <td><strong>#<?= $case['id'] ?></strong></td>
                         <td><?= htmlspecialchars($case['case_title']) ?></td>
                         <td><?= htmlspecialchars($case['user_name']) ?></td>
                         <td><?= htmlspecialchars($case['user_email']) ?></td>
-                        <td><?= ucfirst($case['status']) ?></td>
-                        <td><?= $case['assigned_staff'] ?? 'Not Assigned' ?></td>
-                        <td><?= $case['created_at'] ?></td>
                         <td>
-                            <?php if ($case['closure_id']): ?>
-                                <span class="badge badge-<?=
-                                    $case['closure_status'] == 'pending' ? 'warning' :
-                                    ($case['closure_status'] == 'approved' ? 'success' : 'danger')
-                                ?>">
-                                    <?= ucfirst($case['closure_status']) ?>
-                                </span>
-                                <br>
-                                <?= htmlspecialchars($case['closure_notes']) ?>
-                            <?php else: ?>
-                                -
-                            <?php endif; ?>
+                            <span class="badge badge-pill badge-<?= $case['status'] == 'closed' ? 'secondary' : 'success' ?>">
+                                <?= ucfirst($case['status']) ?>
+                            </span>
                         </td>
                         <td>
-                            <a href="view_case_details.php?id=<?= $case['id'] ?>" class="btn btn-sm btn-info mb-1">View</a>
-                            <a href="counseling_sessions.php?case_id=<?= $case['id'] ?>" class="btn btn-sm btn-warning mb-1">Sessions</a>
-                            <a href="skills_progress.php?case_id=<?= $case['id'] ?>" class="btn btn-sm btn-dark mb-1">Skills</a>
-
-                            <?php if ($case['closure_status'] === 'pending'): ?>
-                                <a href="?closure_id=<?= $case['closure_id'] ?>&action=close"
-                                   class="btn btn-sm btn-success mb-1"
-                                   onclick="return confirm('Close this case?');">
-                                   Close Now
-                                </a>
-                                <a href="?closure_id=<?= $case['closure_id'] ?>&action=reject"
-                                   class="btn btn-sm btn-danger mb-1"
-                                   onclick="return confirm('Reject this closure request?');">
-                                   Reject
-                                </a>
-                            <?php endif; ?>
-
-                            <?php if ($case['status'] === 'pending'): ?>
-                                <a href="update_case_status.php?id=<?= $case['id'] ?>" 
-                                   class="btn btn-sm btn-primary mb-1">
-                                   Update Status
-                                </a>
-                            <?php endif; ?>
+                            <i class="small"><?= $case['assigned_staff'] ?? 'Pending Assignment' ?></i>
+                        </td>
+                        <td><?= date('M d, Y', strtotime($case['created_at'])) ?></td>
+                        <td class="text-center">
+                            <div class="btn-group" role="group">
+                                <a href="view_case_details.php?id=<?= $case['id'] ?>" class="btn btn-sm btn-info">View</a>
+                                <a href="counseling_sessions.php?case_id=<?= $case['id'] ?>" class="btn btn-sm btn-warning">Sessions</a>
+                                <a href="skills_progress.php?case_id=<?= $case['id'] ?>" class="btn btn-sm btn-dark">Skills</a>
+                            </div>
                         </td>
                     </tr>
                 <?php endwhile; ?>
@@ -166,10 +92,13 @@ $stmt->close();
             </table>
         </div>
     <?php else: ?>
-        <p class="text-center">No cases assigned yet.</p>
+        <div class="card p-5 text-center shadow-sm">
+            <p class="lead mb-0 text-muted">No cases have been assigned to your NGO yet.</p>
+        </div>
     <?php endif; ?>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

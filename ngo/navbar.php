@@ -9,7 +9,6 @@
             if (isset($_SESSION["id"]) && !empty($_SESSION["id"])) {
                 echo '<li class="nav-item"><a class="nav-link" href="dashboard.php">Home</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="ngo_profile.php">Profile</a></li>';
-                echo '<li class="nav-item"><a class="nav-link" href="view_staff.php">Staff</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="view_cases.php">Cases</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="logout.php">Logout</a></li>';
             } else {

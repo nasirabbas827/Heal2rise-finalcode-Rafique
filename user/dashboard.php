@@ -1,8 +1,8 @@
 <?php
 session_start();
-include('config.php'); // Your DB connection: $conn = new mysqli(...)
+include('config.php'); 
 
-// Check user login and role
+// 1. Check user login and role
 if (!isset($_SESSION["id"]) || $_SESSION["role"] !== 'user') {
     header("location: ../login.php");
     exit;
@@ -12,28 +12,24 @@ $user_id = $_SESSION["id"];
 $name = $_SESSION["name"];
 
 // =======================================================================
-// 1. NGO Search and List Logic (Existing)
+// 2. NGO Search and List Logic
 // =======================================================================
-
 $search = '';
 if (isset($_GET['search'])) {
     $search = trim($_GET['search']);
-    $stmt = $conn->prepare("SELECT * FROM ngos WHERE status='verified' AND ngo_name LIKE ? ORDER BY id DESC");
+    $stmt = $conn->prepare("SELECT * FROM ngos WHERE status='verified' AND (ngo_name LIKE ? OR service_areas LIKE ?) ORDER BY id DESC");
     $search_param = "%$search%";
-    $stmt->bind_param("s", $search_param);
+    $stmt->bind_param("ss", $search_param, $search_param);
 } else {
-    // Also fetch the service area to display on the card
     $stmt = $conn->prepare("SELECT id, ngo_name, contact_person, phone, service_areas FROM ngos WHERE status='verified' ORDER BY id DESC");
 }
-
 $stmt->execute();
 $ngo_result = $stmt->get_result();
 $stmt->close();
 
 // =======================================================================
-// 2. User-Specific Case Data Fetch
+// 3. User-Specific Case Data Fetch
 // =======================================================================
-
 // Fetch Active/Pending Cases for the current user
 $case_stmt = $conn->prepare("
     SELECT 
@@ -48,13 +44,20 @@ $case_stmt->execute();
 $case_result = $case_stmt->get_result();
 $case_stmt->close();
 
-// Fetch Upcoming Counseling Sessions for the current user's cases
+// =======================================================================
+// 4. FIX: Fetch Upcoming Counseling Sessions (Joining with counselors table)
+// =======================================================================
 $session_stmt = $conn->prepare("
     SELECT 
-        cs.session_date, cs.session_type, cs.duration_minutes, cs.meeting_link, c.case_title, s.full_name as staff_name
+        cs.session_date, 
+        cs.session_type, 
+        cs.duration_minutes, 
+        cs.meeting_link, 
+        c.case_title, 
+        co.full_name as counselor_name
     FROM counseling_sessions cs
     JOIN cases c ON cs.case_id = c.id
-    JOIN ngo_staff s ON cs.staff_id = s.id
+    JOIN counselors co ON cs.counselor_id = co.id
     WHERE c.user_id = ? AND cs.session_date >= NOW()
     ORDER BY cs.session_date ASC
 ");
@@ -62,8 +65,6 @@ $session_stmt->bind_param("i", $user_id);
 $session_stmt->execute();
 $session_result = $session_stmt->get_result();
 $session_stmt->close();
-
-$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -71,16 +72,21 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Dashboard - Mental Health Support</title>
+    <title>User Dashboard | Heal2Rise</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
+
     <style>
+        body { background-color: #f8f9fa; }
         .card-case-status.pending { border-left: 5px solid #ffc107; }
         .card-case-status.approved { border-left: 5px solid #28a745; }
+        .card-case-status.closed { border-left: 5px solid #6c757d; }
         .card-case-status.rejected { border-left: 5px solid #dc3545; }
-        .card-session { border-left: 5px solid #17a2b8; }
-        .card-ngo { min-height: 280px; }
+        .card-session { border-left: 5px solid #17a2b8; background-color: #f0fbfc; }
+        .card-ngo { transition: transform 0.2s; border: none; border-radius: 12px; }
+        .card-ngo:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .welcome-section { background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white; border-radius: 15px; padding: 40px; }
     </style>
 </head>
 <body>
@@ -89,69 +95,71 @@ $conn->close();
 
 <div class="container py-5">
 
-    <div class="text-center mb-5">
-        <h1 class="display-4 text-primary font-weight-bold">Welcome back, <?= htmlspecialchars($name) ?>!</h1>
-        <p class="lead">Check your case progress, upcoming sessions, or find a new support NGO.</p>
+    <div class="welcome-section text-center mb-5 shadow">
+        <h1 class="display-4 font-weight-bold text-white">Welcome, <?= htmlspecialchars($name) ?>!</h1>
+        <p class="lead">Your journey to recovery and mental well-being starts here.</p>
+        <div class="mt-4">
+            <a href="submit_case.php" class="btn btn-light btn-lg font-weight-bold text-primary">
+                <i class="fas fa-plus-circle mr-2"></i> Submit a New Case
+            </a>
+        </div>
     </div>
 
-    <h2 class="mb-4 text-info"><i class="fas fa-chart-line mr-2"></i> Your Current Status</h2>
     <div class="row mb-5">
-        
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-folder-open mr-2"></i> My Cases</h5>
-                </div>
+        <div class="col-lg-7 mb-4">
+            <h4 class="mb-3 font-weight-bold text-dark"><i class="fas fa-folder-open mr-2 text-primary"></i> Case Trackers</h4>
+            <div class="card shadow-sm border-0">
                 <div class="card-body p-0">
                     <?php if ($case_result->num_rows > 0): ?>
-                        <ul class="list-group list-group-flush">
+                        <div class="list-group list-group-flush">
                             <?php while($case = $case_result->fetch_assoc()): 
-                                $status_class = strtolower($case['status']);
+                                $status = strtolower($case['status']);
                             ?>
-                                <li class="list-group-item card-case-status <?= $status_class ?>">
-                                    <div class="d-flex w-100 justify-content-between">
+                                <div class="list-group-item card-case-status <?= $status ?> py-3">
+                                    <div class="d-flex w-100 justify-content-between align-items-center">
                                         <h6 class="mb-1 font-weight-bold"><?= htmlspecialchars($case['case_title']) ?></h6>
-                                        <small class="text-muted">Filed: <?= date('M d, Y', strtotime($case['created_at'])) ?></small>
+                                        <span class="badge badge-<?= ($status === 'approved' ? 'success' : ($status === 'closed' ? 'secondary' : ($status === 'rejected' ? 'danger' : 'warning'))) ?> px-3 py-2">
+                                            <?= ucfirst($status) ?>
+                                        </span>
                                     </div>
-                                    <p class="mb-1 small">Assigned NGO: <?= htmlspecialchars($case['ngo_name'] ?? 'N/A') ?></p>
-                                    <span class="badge badge-pill badge-<?= ($status_class === 'approved' ? 'success' : ($status_class === 'rejected' ? 'danger' : 'warning')) ?>">
-                                        Status: <?= ucfirst($status_class) ?>
-                                    </span>
-                                </li>
+                                    <p class="mb-1 text-muted small">NGO: <?= htmlspecialchars($case['ngo_name'] ?? 'Assignment Pending') ?></p>
+                                    <small class="text-muted"><i class="far fa-clock mr-1"></i> Submitted on <?= date('M d, Y', strtotime($case['created_at'])) ?></small>
+                                </div>
                             <?php endwhile; ?>
-                        </ul>
+                        </div>
                     <?php else: ?>
-                        <div class="alert alert-light text-center m-3">
-                            You have no open or recent cases. Ready to <a href="#ngo-list"> submit one </a>?
+                        <div class="text-center py-5">
+                            <i class="fas fa-clipboard fa-3x text-light mb-3"></i>
+                            <p class="text-muted">You haven't submitted any cases yet.</p>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="fas fa-calendar-check mr-2"></i> Upcoming Sessions</h5>
-                </div>
+        <div class="col-lg-5 mb-4">
+            <h4 class="mb-3 font-weight-bold text-dark"><i class="fas fa-video mr-2 text-info"></i> Upcoming Sessions</h4>
+            <div class="card shadow-sm border-0">
                 <div class="card-body p-0">
                     <?php if ($session_result->num_rows > 0): ?>
-                        <ul class="list-group list-group-flush">
+                        <div class="list-group list-group-flush">
                             <?php while($session = $session_result->fetch_assoc()): ?>
-                                <li class="list-group-item card-session">
-                                    <div class="d-flex w-100 justify-content-between">
-                                        <h6 class="mb-1 font-weight-bold"><?= htmlspecialchars($session['session_type']) ?></h6>
-                                        <small class="text-muted">Case: <?= htmlspecialchars($session['case_title']) ?></small>
-                                    </div>
-                                    <p class="mb-1 small">With:  <?= htmlspecialchars($session['staff_name']) ?>  (<?= $session['duration_minutes'] ?> min)</p>
-                                    <p class="mb-1 small">Date:  <?= date('F d, Y h:i A', strtotime($session['session_date'])) ?> </p>
-                                    <a href="<?= htmlspecialchars($session['meeting_link']) ?>" target="_blank" class="btn btn-sm btn-outline-info mt-1">Join Session <i class="fas fa-external-link-alt"></i></a>
-                                </li>
+                                <div class="list-group-item card-session py-3">
+                                    <h6 class="font-weight-bold mb-1 text-info"><?= htmlspecialchars($session['session_type']) ?></h6>
+                                    <p class="small mb-2 text-dark">
+                                        <i class="fas fa-user-md mr-1"></i> Counselor: <strong><?= htmlspecialchars($session['counselor_name']) ?></strong><br>
+                                        <i class="fas fa-calendar-alt mr-1"></i> <?= date('D, M d - h:i A', strtotime($session['session_date'])) ?> (<?= $session['duration_minutes'] ?> min)
+                                    </p>
+                                    <a href="<?= htmlspecialchars($session['meeting_link']) ?>" target="_blank" class="btn btn-sm btn-info btn-block">
+                                        <i class="fas fa-external-link-alt mr-1"></i> Join Meeting
+                                    </a>
+                                </div>
                             <?php endwhile; ?>
-                        </ul>
+                        </div>
                     <?php else: ?>
-                        <div class="alert alert-light text-center m-3">
-                            No upcoming sessions scheduled.
+                        <div class="text-center py-5">
+                            <i class="fas fa-calendar-times fa-3x text-light mb-3"></i>
+                            <p class="text-muted">No sessions scheduled at the moment.</p>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -159,46 +167,50 @@ $conn->close();
         </div>
     </div>
     
-    <h2 class="mb-4 text-primary" id="ngo-list"><i class="fas fa-handshake mr-2"></i> Find Support & Submit a New Case</h2>
-    
-    <form method="get" class="form-inline mb-4 justify-content-center">
-        <input type="text" name="search" class="form-control mr-2" placeholder="Search NGOs by name or service area" style="width: 400px;" value="<?= htmlspecialchars($search) ?>">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
-    </form>
+    <div class="mt-5 pt-4">
+        <h3 class="text-center font-weight-bold mb-4">Verified Support Network</h3>
+        <form method="get" class="form-inline mb-5 justify-content-center">
+            <div class="input-group mb-3" style="width: 100%; max-width: 600px;">
+                <input type="text" name="search" class="form-control form-control-lg" placeholder="Search by NGO Name or Service (e.g. Anxiety, Youth)" value="<?= htmlspecialchars($search) ?>">
+                <div class="input-group-append">
+                    <button type="submit" class="btn btn-primary px-4"><i class="fas fa-search mr-2"></i> Find NGO</button>
+                </div>
+            </div>
+        </form>
 
-    <div class="row">
-        <?php if ($ngo_result->num_rows > 0): ?>
-            <?php while($ngo = $ngo_result->fetch_assoc()): ?>
-                <div class="col-md-4 mb-4">
-                    <div class="card shadow-sm h-100 card-ngo">
-                        <div class="card-body d-flex flex-column">
-                            <h5 class="card-title text-primary font-weight-bold"><?= htmlspecialchars($ngo['ngo_name']) ?></h5>
-                            <hr>
-                            <p class="card-text small"><strong>Contact Person:</strong> <?= htmlspecialchars($ngo['contact_person'] ?? 'N/A') ?></p>
-                            <p class="card-text small"><strong>Phone:</strong> <?= htmlspecialchars($ngo['phone'] ?? 'N/A') ?></p>
-                            <p class="card-text small flex-grow-1">
-                                <strong>Service Areas:</strong> 
-                                <span class="badge badge-info"><?= htmlspecialchars($ngo['service_areas']) ?></span>
-                            </p>
-                            
-                            <form method="post" action="submit_case.php" class="mt-3">
-                                <input type="hidden" name="ngo_id" value="<?= $ngo['id'] ?>">
-                                <input type="hidden" name="user_id" value="<?= $user_id ?>">
-                                <button type="submit" class="btn btn-success btn-block">Submit Case to this NGO <i class="fas fa-arrow-right ml-1"></i></button>
-                            </form>
+        <div class="row">
+            <?php if ($ngo_result->num_rows > 0): ?>
+                <?php while($ngo = $ngo_result->fetch_assoc()): ?>
+                    <div class="col-md-4 mb-4">
+                        <div class="card shadow-sm h-100 card-ngo border-top border-primary">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary font-weight-bold mb-3"><?= htmlspecialchars($ngo['ngo_name']) ?></h5>
+                                <div class="small text-muted mb-3">
+                                    <p class="mb-1"><i class="fas fa-user-tie mr-2"></i> <?= htmlspecialchars($ngo['contact_person'] ?? 'Staff') ?></p>
+                                    <p class="mb-0"><i class="fas fa-phone-alt mr-2"></i> <?= htmlspecialchars($ngo['phone'] ?? 'N/A') ?></p>
+                                </div>
+                                <h6 class="small font-weight-bold">Specializations:</h6>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <?php 
+                                    $areas = explode(',', $ngo['service_areas']);
+                                    foreach($areas as $area): ?>
+                                        <span class="badge badge-light border text-secondary mr-1 mb-1"><?= trim(htmlspecialchars($area)) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                <?php endwhile; ?>
+            <?php else: ?>
+                <div class="col-12 text-center py-4">
+                    <p class="text-muted">We couldn't find any NGOs matching that search. Try another keyword!</p>
                 </div>
-            <?php endwhile; ?>
-        <?php else: ?>
-            <div class="col-12">
-                <p class="text-center text-muted">No verified NGOs found matching your criteria.</p>
-            </div>
-        <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </div>
-
 </div>
 
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

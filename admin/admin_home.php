@@ -21,7 +21,6 @@ $total_sessions = 0;
 $pending_closure_requests = 0;
 $recent_users = null;
 $recent_cases = null;
-$recent_notes = null;
 $user_roles_labels = ['User', 'Counselor', 'Psychiatrist'];
 $user_roles_data = [0, 0, 0];
 $case_status_labels = ['Pending', 'Approved', 'Rejected'];
@@ -95,17 +94,7 @@ if (isset($conn)) {
         ";
         $recent_cases = $conn->query($recent_cases_query);
 
-        // --- Recent Progress Notes ---
-        $recent_notes_query = "
-            SELECT pn.note_date, pn.description, c.case_title, s.full_name as staff_name
-            FROM progress_notes pn
-            JOIN cases c ON pn.case_id = c.id
-            LEFT JOIN ngo_staff s ON pn.staff_id = s.id
-            ORDER BY pn.created_at DESC
-            LIMIT 5
-        ";
-        $recent_notes = $conn->query($recent_notes_query);
-
+        
     } catch (Exception $e) {
         // Handle database errors (optional: log the error)
         // echo "Database Error: " . $e->getMessage();
@@ -127,7 +116,6 @@ if (isset($conn)) {
     // Set recent data results to empty for placeholders
     $recent_users = new class { public function num_rows() { return 0; } public function fetch_assoc() { return null; } };
     $recent_cases = new class { public function num_rows() { return 0; } public function fetch_assoc() { return null; } };
-    $recent_notes = new class { public function num_rows() { return 0; } public function fetch_assoc() { return null; } };
 
 }
 
@@ -393,29 +381,7 @@ include('admin_navbar.php');
             </div>
         </div>
 
-        <div class="col-lg-4 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Latest Progress Notes</h5>
-                </div>
-                <div class="card-body notification-list">
-                    <?php if ($recent_notes && $recent_notes->num_rows > 0): ?>
-                        <ul class="list-unstyled">
-                            <?php while ($note = $recent_notes->fetch_assoc()): ?>
-                                <li class="alert alert-success mb-3">
-                                    <p class="mb-1">Note on Case: <strong><?php echo htmlspecialchars($note['case_title'] ?? 'N/A'); ?></strong></p>
-                                    <p class="mb-1 small text-muted font-italic">Staff: <?php echo htmlspecialchars($note['staff_name'] ?? 'Admin'); ?></p>
-                                    <p class="mb-1 small text-muted font-italic">"<?php echo htmlspecialchars(substr($note['description'], 0, 40)) . '..."'; ?></p>
-                                    <small>Date: <?php echo date('M d, Y', strtotime($note['note_date'])); ?></small>
-                                </li>
-                            <?php endwhile; ?>
-                        </ul>
-                    <?php else: ?>
-                        <div class="alert alert-secondary text-center">No recent progress notes.</div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
+
     </div>
 </div>
 

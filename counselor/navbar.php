@@ -1,5 +1,5 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
-    <a class="navbar-brand" href="staff_dashboard.php">Heal2Rise</a>
+    <a class="navbar-brand" href="dashboard.php">Heal2Rise</a>
     <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
     </button>
@@ -7,7 +7,7 @@
         <ul class="navbar-nav ml-auto">
             <?php
             if (isset($_SESSION["id"]) && !empty($_SESSION["id"])) {
-                echo '<li class="nav-item"><a class="nav-link" href="staff_dashboard.php">Home</a></li>';
+                echo '<li class="nav-item"><a class="nav-link" href="dashboard.php">Home</a></li>';
                 echo '<li class="nav-item"><a class="nav-link" href="logout.php">Logout</a></li>';
             } else {
                 echo '<li class="nav-item"><a class="nav-link" href="register.php">Register</a></li>';

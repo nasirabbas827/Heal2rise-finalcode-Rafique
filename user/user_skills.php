@@ -2,6 +2,7 @@
 session_start();
 include('../config.php');
 
+// 1. Security Check
 if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'user') {
     header("location: ../login.php");
     exit;
@@ -9,265 +10,114 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'user') {
 
 $user_id = $_SESSION['id'];
 
-if (!isset($_GET['case_id'])) {
+// 2. Get Case ID from URL (using 'id' to match your dashboard links)
+if (!isset($_GET['id'])) {
     header("location: view_cases.php");
     exit;
 }
 
-$case_id = intval($_GET['case_id']);
+$case_id = intval($_GET['id']);
 
-// Fetch case info
-$stmt = $conn->prepare("SELECT case_title, assigned_ngo_id FROM cases WHERE id=? AND user_id=?");
+// 3. Fetch case info to verify ownership
+$stmt = $conn->prepare("SELECT case_title, status FROM cases WHERE id=? AND user_id=?");
 $stmt->bind_param("ii", $case_id, $user_id);
 $stmt->execute();
 $case = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$case) {
-    echo "Case not found.";
-    exit;
+    die("<div class='container mt-5 alert alert-danger text-center'>Unauthorized access to this case.</div>");
 }
 
-// Handle adding progress note
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['add_note'])) {
-        $note_date = $_POST['note_date'];
-        $description = trim($_POST['description']);
-        $overall_progress = trim($_POST['overall_progress']);
-
-        $stmt = $conn->prepare("INSERT INTO progress_notes (case_id, staff_id, note_date, description, overall_progress) VALUES (?, 0, ?, ?, ?)");
-        $stmt->bind_param("isss", $case_id, $note_date, $description, $overall_progress);
-        if ($stmt->execute()) {
-            $success_msg = "Progress note added successfully!";
-        } else {
-            $error_msg = "Error adding progress note.";
-        }
-        $stmt->close();
-    }
-
-    if (isset($_POST['edit_note'])) {
-        $note_id = intval($_POST['note_id']);
-        $note_date = $_POST['note_date'];
-        $description = trim($_POST['description']);
-        $overall_progress = trim($_POST['overall_progress']);
-
-        $stmt = $conn->prepare("UPDATE progress_notes SET note_date=?, description=?, overall_progress=? WHERE id=? AND case_id=?");
-        $stmt->bind_param("sssii", $note_date, $description, $overall_progress, $note_id, $case_id);
-        if ($stmt->execute()) {
-            $success_msg = "Progress note updated successfully!";
-        } else {
-            $error_msg = "Error updating progress note.";
-        }
-        $stmt->close();
-    }
-}
-
-// Handle deletion of progress note
-if (isset($_GET['delete_note'])) {
-    $note_id = intval($_GET['delete_note']);
-    $delete_stmt = $conn->prepare("DELETE FROM progress_notes WHERE id=? AND case_id=?");
-    $delete_stmt->bind_param("ii", $note_id, $case_id);
-    $delete_stmt->execute();
-    if ($delete_stmt->affected_rows > 0) {
-        $success_msg = "Progress note deleted successfully.";
-    } else {
-        $error_msg = "Unable to delete progress note.";
-    }
-    $delete_stmt->close();
-}
-
-// Fetch skill programs
-$stmt = $conn->prepare("SELECT * FROM skill_programs WHERE ngo_id=? ORDER BY created_at DESC");
-$stmt->bind_param("i", $case['assigned_ngo_id']);
-$stmt->execute();
-$skills_result = $stmt->get_result();
-$stmt->close();
-
-// Fetch progress notes
-$stmt = $conn->prepare("SELECT pn.*, st.full_name AS staff_name FROM progress_notes pn LEFT JOIN ngo_staff st ON pn.staff_id = st.id WHERE pn.case_id=? ORDER BY pn.note_date DESC");
+// 4. Fetch Skill Programs SPECIFICALLY linked to this Case ID
+$stmt = $conn->prepare("
+    SELECT sp.*, co.full_name AS counselor_name 
+    FROM skill_programs sp
+    JOIN counselors co ON sp.counselor_id = co.id
+    WHERE sp.case_id = ? 
+    ORDER BY sp.created_at DESC
+");
 $stmt->bind_param("i", $case_id);
 $stmt->execute();
-$notes_result = $stmt->get_result();
+$skills_result = $stmt->get_result();
 $stmt->close();
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Skills & Progress for <?= htmlspecialchars($case['case_title']) ?></title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <meta charset="UTF-8">
+    <title>My Learning Modules | <?= htmlspecialchars($case['case_title']) ?></title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <link rel="stylesheet" href="../css/style.css">
+
+    <style>
+        .skill-hero { background: linear-gradient(45deg, #6610f2, #6f42c1); color: white; border-radius: 15px; padding: 30px; }
+        .program-card { border: none; border-radius: 15px; transition: 0.3s; }
+        .program-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+        .mode-badge { position: absolute; top: 20px; right: 20px; }
+    </style>
 </head>
-<body>
+<body class="bg-light">
+
 <?php include('navbar.php'); ?>
+
 <div class="container py-5">
-
-<h2>Skills Programs for Case: <?= htmlspecialchars($case['case_title']) ?></h2>
-
-<?php if(!empty($success_msg)) echo "<div class='alert alert-success'>$success_msg</div>"; ?>
-<?php if(!empty($error_msg)) echo "<div class='alert alert-danger'>$error_msg</div>"; ?>
-
-<!-- Skill Programs Table -->
-<?php if($skills_result->num_rows > 0): ?>
-<table class="table table-bordered table-striped">
-<thead>
-<tr>
-<th>ID</th>
-<th>Program Name</th>
-<th>Description</th>
-<th>Duration (weeks)</th>
-<th>Mode</th>
-<th>Created At</th>
-</tr>
-</thead>
-<tbody>
-<?php while($skill = $skills_result->fetch_assoc()): ?>
-<tr>
-<td><?= $skill['id'] ?></td>
-<td><?= htmlspecialchars($skill['program_name']) ?></td>
-<td><?= nl2br(htmlspecialchars($skill['description'])) ?></td>
-<td><?= $skill['duration_weeks'] ?></td>
-<td><?= htmlspecialchars($skill['mode']) ?></td>
-<td><?= $skill['created_at'] ?></td>
-</tr>
-<?php endwhile; ?>
-</tbody>
-</table>
-<?php else: ?>
-<p>No skill programs available for this case.</p>
-<?php endif; ?>
-
-<!-- Progress Notes Section -->
-<h3 class="mt-5">Progress Notes</h3>
-<button class="btn btn-success mb-3" data-toggle="modal" data-target="#addNoteModal">Add Progress Note</button>
-
-<?php if($notes_result->num_rows > 0): ?>
-<table class="table table-bordered table-striped">
-<thead>
-<tr>
-<th>ID</th>
-<th>Note Date</th>
-<th>Description</th>
-<th>Overall Progress</th>
-<th>Added By</th>
-<th>Created At</th>
-<th>Actions</th>
-</tr>
-</thead>
-<tbody>
-<?php while($note = $notes_result->fetch_assoc()): ?>
-<tr>
-<td><?= $note['id'] ?></td>
-<td><?= $note['note_date'] ?></td>
-<td><?= nl2br(htmlspecialchars($note['description'])) ?></td>
-<td><?= htmlspecialchars($note['overall_progress']) ?></td>
-<td><?= $note['staff_name'] ?? 'User' ?></td>
-<td><?= $note['created_at'] ?></td>
-<td>
-    <button class="btn btn-sm btn-primary mb-1 editBtn" 
-            data-id="<?= $note['id'] ?>" 
-            data-date="<?= $note['note_date'] ?>" 
-            data-description="<?= htmlspecialchars($note['description'], ENT_QUOTES) ?>" 
-            data-progress="<?= htmlspecialchars($note['overall_progress'], ENT_QUOTES) ?>">
-            Edit
-    </button>
-    <a href="?case_id=<?= $case_id ?>&delete_note=<?= $note['id'] ?>" 
-       class="btn btn-sm btn-danger mb-1" 
-       onclick="return confirm('Are you sure you want to delete this note?');">
-       Delete
-    </a>
-</td>
-</tr>
-<?php endwhile; ?>
-</tbody>
-</table>
-<?php else: ?>
-<p>No progress notes added yet.</p>
-<?php endif; ?>
-
-<!-- Add Note Modal -->
-<div class="modal fade" id="addNoteModal" tabindex="-1" role="dialog">
-  <div class="modal-dialog" role="document">
-    <form method="post" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Add Progress Note</h5>
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Note Date</label>
-          <input type="date" name="note_date" class="form-control" required>
+    <div class="skill-hero shadow-sm mb-5">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2 class="font-weight-bold">Rehabilitation & Skills</h2>
+                <p class="lead mb-0">Custom modules assigned by your counselor to aid your recovery journey.</p>
+                <small class="opacity-75">Case: <?= htmlspecialchars($case['case_title']) ?></small>
+            </div>
+            <div class="col-md-4 text-right">
+                <i class="fas fa-user-graduate fa-5x opacity-25"></i>
+            </div>
         </div>
-        <div class="form-group">
-          <label>Description</label>
-          <textarea name="description" class="form-control" rows="3" required></textarea>
-        </div>
-        <div class="form-group">
-          <label>Overall Progress</label>
-          <textarea name="overall_progress" class="form-control" rows="1"></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="submit" name="add_note" class="btn btn-primary">Add Note</button>
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-      </div>
-    </form>
-  </div>
+    </div>
+
+    <div class="row">
+        <?php if($skills_result->num_rows > 0): ?>
+            <?php while($s = $skills_result->fetch_assoc()): ?>
+                <div class="col-md-6 mb-4">
+                    <div class="card program-card shadow-sm h-100">
+                        <div class="card-body p-4">
+                            <span class="badge badge-pill badge-primary mode-badge px-3 py-2"><?= $s['mode'] ?></span>
+                            
+                            <h4 class="font-weight-bold text-dark pr-5"><?= htmlspecialchars($s['program_name']) ?></h4>
+                            <p class="text-muted mt-3"><?= nl2br(htmlspecialchars($s['description'])) ?></p>
+                            
+                            <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-uppercase font-weight-bold text-secondary d-block">Assigned By</small>
+                                    <span class="text-primary"><?= htmlspecialchars($s['counselor_name']) ?></span>
+                                </div>
+                                <div class="text-right">
+                                    <small class="text-uppercase font-weight-bold text-secondary d-block">Duration</small>
+                                    <span class="badge badge-light border"><?= $s['duration_weeks'] ?> Weeks</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endwhile; ?>
+        <?php else: ?>
+            <div class="col-12 text-center py-5">
+                <div class="bg-white p-5 rounded shadow-sm border">
+                    <i class="fas fa-tasks fa-4x text-light mb-3"></i>
+                    <h5 class="text-muted">No specific modules assigned yet.</h5>
+                    <p class="small text-secondary">Your counselor will list your rehabilitation programs here once they are finalized.</p>
+                    <a href="dashboard.php" class="btn btn-primary mt-3">Return to Dashboard</a>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    
 </div>
 
-<!-- Edit Note Modal -->
-<div class="modal fade" id="editNoteModal" tabindex="-1" role="dialog">
-  <div class="modal-dialog" role="document">
-    <form method="post" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit Progress Note</h5>
-        <button type="button" class="close" data-dismiss="modal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" name="note_id" id="edit_note_id">
-        <div class="form-group">
-          <label>Note Date</label>
-          <input type="date" name="note_date" id="edit_note_date" class="form-control" required>
-        </div>
-        <div class="form-group">
-          <label>Description</label>
-          <textarea name="description" id="edit_description" class="form-control" rows="3" required></textarea>
-        </div>
-        <div class="form-group">
-          <label>Overall Progress</label>
-          <textarea name="overall_progress" id="edit_overall_progress" class="form-control" rows="1"></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="submit" name="edit_note" class="btn btn-primary">Update Note</button>
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<a href="view_cases.php" class="btn btn-secondary mt-3">Back to Cases</a>
-
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-$(document).ready(function(){
-    $('.editBtn').click(function(){
-        var id = $(this).data('id');
-        var date = $(this).data('date');
-        var desc = $(this).data('description');
-        var progress = $(this).data('progress');
-
-        $('#edit_note_id').val(id);
-        $('#edit_note_date').val(date);
-        $('#edit_description').val(desc);
-        $('#edit_overall_progress').val(progress);
-
-        $('#editNoteModal').modal('show');
-    });
-});
-</script>
-
-</div>
 </body>
 </html>

@@ -13,6 +13,9 @@
         <a class="nav-link" href="view_users.php">Users</a>
       </li>
       <li class="nav-item ">
+        <a class="nav-link" href="view_team.php">Team Members</a>
+      </li>
+      <li class="nav-item ">
         <a class="nav-link" href="view_cases.php">Cases</a>
       </li>
        <li class="nav-item">
